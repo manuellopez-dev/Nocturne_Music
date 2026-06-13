@@ -4,6 +4,7 @@ import '../innertube_repository.dart';
 import '../../../domain/models/song.dart';
 import '../../../services/audio_handler.dart';
 import 'innertube_providers.dart';
+import 'package:just_audio/just_audio.dart';
 
 class PlayerState {
   final Song? currentSong;
@@ -88,32 +89,41 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         state = state.copyWith(isPlaying: playing);
       }
     });
+
+    // Detecta cuando el player realmente empieza a reproducir
+    nocturnePlayer.processingStateStream.listen((processingState) {
+      if (mounted) {
+        if (processingState == ProcessingState.ready ||
+            processingState == ProcessingState.buffering) {
+          state = state.copyWith(isLoading: false);
+        }
+        if (processingState == ProcessingState.loading) {
+          state = state.copyWith(isLoading: true);
+        }
+      }
+    });
   }
 
   Future<void> playSong(Song song) async {
-  state = state.copyWith(
-    currentSong: song,
-    isLoading: true,
-    isPlaying: false,
-    progress: 0.0,
-    currentSeconds: 0,
-  );
-
-  addToRecentlyPlayed(_ref, song);
-
-  try {
-    print('[Player] Reproduciendo: ${song.title} | id: ${song.id}');
-    await nocturnePlayer.playVideoId(song.id);
     state = state.copyWith(
-      isLoading: false,
-      isPlaying: true,
-      totalSeconds: song.duration,
+      currentSong: song,
+      isLoading: true,
+      isPlaying: false,
+      progress: 0.0,
+      currentSeconds: 0,
     );
-  } catch (e) {
-    print('[Player] Error: $e');
-    state = state.copyWith(isLoading: false);
+
+    addToRecentlyPlayed(_ref, song);
+
+    try {
+      print('[Player] Reproduciendo: ${song.title} | id: ${song.id}');
+      await nocturnePlayer.playVideoId(song.id);
+      // Ya no ponemos isLoading: false aquí — lo maneja processingStateStream
+    } catch (e) {
+      print('[Player] Error: $e');
+      state = state.copyWith(isLoading: false); // Solo en error
+    }
   }
-}
 
   Future<void> togglePlay() async {
     if (state.isPlaying) {

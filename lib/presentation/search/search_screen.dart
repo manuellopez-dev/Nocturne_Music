@@ -57,7 +57,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             const SizedBox(height: 24),
             Expanded(
               child: searchState.query.isEmpty
-                  ? _BrowseContent()
+                  ? _BrowseContent(
+                      onCategoryTap: (label) {
+                        _controller.text = label;
+                        _controller.selection = TextSelection.fromPosition(
+                          TextPosition(offset: label.length),
+                        );
+                      },
+                    )
                   : _SearchResultsView(state: searchState),
             ),
           ],
@@ -133,7 +140,9 @@ class _SearchHeader extends StatelessWidget {
 }
 
 class _BrowseContent extends ConsumerWidget {
-  const _BrowseContent({super.key});
+  final ValueChanged<String> onCategoryTap;
+
+  const _BrowseContent({super.key, required this.onCategoryTap});
 
   final List<Map<String, dynamic>> categories = const [
     {'label': 'Pop', 'color': 0xFFB71C1C},
@@ -173,6 +182,7 @@ class _BrowseContent extends ConsumerWidget {
                 label: cat['label'],
                 color: Color(cat['color']),
                 onTap: () {
+                  onCategoryTap(cat['label']);
                   ref.read(searchProvider.notifier).search(cat['label']);
                 },
               );
@@ -190,45 +200,52 @@ class _CategoryCard extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _CategoryCard({required this.label, required this.color, required this.onTap,});
+  const _CategoryCard({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [color, color.withOpacity(0.5)],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [color, color.withOpacity(0.5)],
+          ),
         ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -10,
-            bottom: -10,
-            child: Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.07),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -10,
+              bottom: -10,
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.07),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -265,8 +282,8 @@ class _SearchResultsView extends ConsumerWidget {
         ),
       ),
       data: (result) {
-  final songs = result.songs;
-  if (songs.isEmpty) {
+        final songs = result.songs;
+        if (songs.isEmpty) {
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -284,20 +301,20 @@ class _SearchResultsView extends ConsumerWidget {
         }
 
         return ListView.builder(
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    itemCount: songs.length,
-    itemBuilder: (context, index) {
-      final song = songs[index];
-      return _SongResultTile(
-        song: song,
-        onTap: () {
-          ref.read(playerProvider.notifier).playSong(song);
-          context.push('/player');
-        },
-      );
-    },
-  );
-},
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          itemCount: songs.length,
+          itemBuilder: (context, index) {
+            final song = songs[index];
+            return _SongResultTile(
+              song: song,
+              onTap: () {
+                ref.read(playerProvider.notifier).playSong(song);
+                context.push('/player');
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

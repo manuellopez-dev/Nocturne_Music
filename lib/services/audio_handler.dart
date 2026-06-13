@@ -3,11 +3,39 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 final nocturnePlayer = NocturnePlayer();
 
+class _AuthHttpClient extends YoutubeHttpClient {
+  String? _accessToken;
+
+  void setToken(String token) {
+    _accessToken = token;
+  }
+
+  @override
+  Map<String, String> get headers => {
+        ...YoutubeHttpClient.defaultHeaders,
+        if (_accessToken != null) ...{
+          'Authorization': 'Bearer $_accessToken',
+          'X-Goog-AuthUser': '0',
+        },
+        'cookie': 'CONSENT=YES+cb',
+      };
+}
+
 class NocturnePlayer {
   final AudioPlayer _player = AudioPlayer();
-  final YoutubeExplode _yt = YoutubeExplode();
+  final _authClient = _AuthHttpClient();
+  late final YoutubeExplode _yt;
 
-  void setAuthToken(String accessToken) {}
+  final Map<String, StreamInfo> _manifestCache = {};
+
+  NocturnePlayer() {
+    _yt = YoutubeExplode(_authClient);
+  }
+
+  void setAuthToken(String accessToken) {
+    _authClient.setToken(accessToken);
+    print('[Player] Token configurado');
+  }
 
   Stream<Duration> get positionStream => _player.positionStream;
   Stream<Duration?> get durationStream => _player.durationStream;
@@ -28,25 +56,31 @@ class NocturnePlayer {
       print('[Player] Preparando: $videoId');
       await _player.stop();
 
-      final manifest = await _yt.videos.streamsClient.getManifest(videoId);
+      StreamInfo streamInfo;
 
-      // Usa el stream de MENOR calidad — carga más rápido
-      final audioStreams = manifest.audioOnly
-          .where((s) => s.codec.mimeType.contains('mp4'))
-          .toList()
-        ..sort((a, b) => a.bitrate.compareTo(b.bitrate)); // menor primero
+      if (_manifestCache.containsKey(videoId)) {
+        streamInfo = _manifestCache[videoId]!;
+        print('[Player] Usando manifest cacheado');
+      } else {
+        final manifest = await _yt.videos.streamsClient.getManifest(videoId);
+        final audioStreams = manifest.audioOnly
+            .where((s) => s.codec.mimeType.contains('mp4'))
+            .toList()
+          ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
 
-      final streamInfo = audioStreams.isNotEmpty
-          ? audioStreams.first
-          : manifest.audioOnly.sortByBitrate().first;
+        streamInfo = audioStreams.isNotEmpty
+            ? audioStreams.first
+            : manifest.audioOnly.sortByBitrate().first;
 
-      final streamUrl = streamInfo.url.toString();
-      print('[Player] URL: ${streamUrl.substring(0, 80)}...');
+        _manifestCache[videoId] = streamInfo;
+        print('[Player] Manifest cacheado para: $videoId');
+      }
+
       print('[Player] Bitrate: ${streamInfo.bitrate} | Size: ${streamInfo.size.totalBytes}');
 
       await _player.setAudioSource(
         AudioSource.uri(
-          Uri.parse(streamUrl),
+          Uri.parse(streamInfo.url.toString()),
           headers: {
             'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
             'Origin': 'https://www.youtube.com',
